@@ -102,7 +102,51 @@ function act_compose($sql_conn)
  */
 function act_up($sql_conn)
 {
-    echo "act_up<br/>";
+    // Get action parameters
+    $pid = $_POST["pid"];
+
+    // Get the problem that the target follows
+    $result = $sql_conn->query("SELECT `follows` from `problem` WHERE `pid` = $pid;");
+    if (!$result) {
+        die("edit failed");
+    }
+    $follows = $result->fetch_assoc()["follows"];
+
+    // Stop if target problem is already at the top
+    if ($follows == 0)
+        return;
+
+    // Get the problem that that problem follows
+    $result = $sql_conn->query("SELECT `follows` from `problem` WHERE `pid` = $follows;");
+    if (!$result) {
+        die("edit failed");
+    }
+    $follows_follows = $result->fetch_assoc()["follows"];
+
+    // Get the problem that follows the target
+    $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `follows` = $pid;");
+    if (!$result) {
+        die("edit failed");
+    }
+    $follower = $result->fetch_assoc()["follows"];
+
+    // Make target follow followee's followee
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows_follows WHERE `pid` = $pid;");
+    if (!$result) {
+        die("edit failed");
+    }
+
+    // Make follower follow target's followee
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `pid` = $follower;");
+    if (!$result) {
+        die("edit failed");
+    }
+
+    // Make target's followee follow target
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $pid WHERE `pid` = $follows;");
+    if (!$result) {
+        die("edit failed");
+    }
 }
 
 /**
@@ -112,7 +156,8 @@ function act_up($sql_conn)
  */
 function act_down($sql_conn)
 {
-    echo "act_down<br/>";
+    // Get action parameters
+    $pid = $_POST["pid"];
 }
 
 /**
@@ -143,20 +188,20 @@ function act_trash($sql_conn)
     // Get action parameters
     $pid = $_POST["pid"];
 
-    // Get the problem that the in-deletion problem follows
+    // Get the problem that the target problem follows
     $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `pid` = $pid;");
     if (!$result) {
-        die("trash failed: get follows $pid");
+        die("trash failed: get follows");
     }
     $follows = $result->fetch_assoc()["follows"];
 
-    // Exclude in-deletion problem from linked list
+    // Exclude target problem from linked list
     $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `follows` = $pid;");
     if (!$result) {
         die("trash failed: exclude");
     }
 
-    // Make in-deletion problem follow nothing else in the list
+    // Make target problem follow nothing else in the list
     // It will be completely disconnected from every other problem
     $result = $sql_conn->query("UPDATE `problem` SET `follows` = -1 WHERE `pid` = $pid;");
     if (!$result) {
@@ -227,23 +272,31 @@ $last_page = ceil(count($ordered_pids) / $page_size);
             src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"></script>
     <script type="text/javascript">
         //
+        // Problem Composition Functions
+        //
+
+        function on_compose_form_submit() {
+            var compose_form_content = document.getElementById("compose-form-content");
+            var content = compose_form_content.value;
+
+            if (content === "") {
+                alert("Content may not be empty!");
+                return false;
+            }
+
+            return true;
+        }
+
+        //
         // Problem Action Functions
         //
 
-        var action_form;
-        var action_form_act;
-        var action_form_pid;
-        var action_form_content;
-
-        function find_action_form() {
-            action_form = action_form || document.getElementById("action-form");
-            action_form_act = action_form_act || document.getElementById("action-form-act");
-            action_form_pid = action_form_pid || document.getElementById("action-form-pid");
-            action_form_content = action_form_content || document.getElementById("action-form-content");
-        }
-
         function submit_action(act, pid, content) {
-            find_action_form();
+            var action_form = document.getElementById("action-form");
+            var action_form_act = document.getElementById("action-form-act");
+            var action_form_pid = document.getElementById("action-form-pid");
+            var action_form_content = document.getElementById("action-form-content");
+
             action_form_act.value = act;
             action_form_pid.value = pid;
             action_form_content.value = content;
@@ -281,12 +334,19 @@ $last_page = ceil(count($ordered_pids) / $page_size);
             var content_edit = document.getElementById("content-edit-" + pid);
             var content_edit_text = document.getElementById("content-edit-" + pid + "-text");
 
+            var content = content_edit_text.value;
+
+            if (content === "") {
+                alert("Content may not be empty!");
+                return;
+            }
+
             actions_normal.style.display = "";
             actions_edit.style.display = "none";
             content_normal.style.display = "";
             content_edit.style.display = "none";
 
-            submit_action("edit", pid, content_edit_text.value);
+            submit_action("edit", pid, content);
         }
 
         function edit_reject(pid) {
@@ -381,7 +441,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
         <h4>Tyler Filla</h4>
     </div>
     <div class="row" style="margin-bottom: 20px; margin-top: 20px;">
-        <form method="post">
+        <form method="post" onsubmit="return on_compose_form_submit();">
             <label for="compose-form-content">Submit a new problem:</label><br/>
             <textarea id="compose-form-content" name="content" rows="5"></textarea>
             <input type="hidden" name="act" value="compose"/><br/>
