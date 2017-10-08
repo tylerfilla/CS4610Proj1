@@ -105,47 +105,40 @@ function act_up($sql_conn)
     // Get action parameters
     $pid = $_POST["pid"];
 
-    // Get the problem that the target follows
-    $result = $sql_conn->query("SELECT `follows` from `problem` WHERE `pid` = $pid;");
+    // Get target problem's follows
+    $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `pid` = $pid;");
     if (!$result) {
-        die("edit failed");
+        die("move up failed: get target follows");
     }
     $follows = $result->fetch_assoc()["follows"];
 
-    // Stop if target problem is already at the top
+    // Get target problem's follower
+    $result = $sql_conn->query("SELECT `pid` FROM `problem` WHERE `follows` = $pid;");
+    if (!$result) {
+        die("move up failed: get target follower");
+    }
+    $follower = $result->fetch_assoc()["pid"];
+
+    // Stop if problem is already first
     if ($follows == 0)
         return;
 
-    // Get the problem that that problem follows
-    $result = $sql_conn->query("SELECT `follows` from `problem` WHERE `pid` = $follows;");
+    // Make target follow target follows' follows
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = (SELECT `follows` FROM (SELECT * FROM `problem`) AS temp WHERE `pid` = $follows) WHERE `pid` = $pid;");
     if (!$result) {
-        die("edit failed");
-    }
-    $follows_follows = $result->fetch_assoc()["follows"];
-
-    // Get the problem that follows the target
-    $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `follows` = $pid;");
-    if (!$result) {
-        die("edit failed");
-    }
-    $follower = $result->fetch_assoc()["follows"];
-
-    // Make target follow followee's followee
-    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows_follows WHERE `pid` = $pid;");
-    if (!$result) {
-        die("edit failed");
+        die("move up failed: exclude preceding: $sql_conn->error");
     }
 
-    // Make follower follow target's followee
-    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `pid` = $follower;");
-    if (!$result) {
-        die("edit failed");
-    }
-
-    // Make target's followee follow target
+    // Make target follows follow target
     $result = $sql_conn->query("UPDATE `problem` SET `follows` = $pid WHERE `pid` = $follows;");
     if (!$result) {
-        die("edit failed");
+        die("move up failed: reroute preceding: $sql_conn->error");
+    }
+
+    // Make target follower follow target follows
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `pid` = $follower;");
+    if (!$result) {
+        die("move up failed: reroute follower: $sql_conn->error");
     }
 }
 
