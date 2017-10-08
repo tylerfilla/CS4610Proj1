@@ -11,7 +11,6 @@
 //
 
 $param_act = $_POST["act"];
-$param_pid = $_POST["pid"];
 $param_page = $_GET["page"];
 $param_psize = $_GET["psize"];
 
@@ -67,26 +66,27 @@ function act_compose($sql_conn)
     $content = $_POST["content"];
 
     // Insert content to database
-    $result = $sql_conn->query("INSERT INTO `problem` (`content`) VALUES ('$content');");
+    // We temporarily set follows to something nonzero as a hack (I chose 1)
+    $result = $sql_conn->query("INSERT INTO `problem` (`content`, `follows`) VALUES ('$content', 1);");
     if (!$result) {
         die("compose failed: insert content");
     }
 
-    // Query assigned ID of problem
+    // Query auto-assigned ID of new problem
     $result = $sql_conn->query("SELECT LAST_INSERT_ID();");
     if (!$result) {
         die("compose failed: get ID");
     }
     $pid = $result->fetch_all()[0][0];
 
-    // Make first ordered problem follow the new problem
-    $result = $sql_conn->query("UPDATE `problem_order` SET `follows` = $pid WHERE `follows` = 0;");
+    // Make former first problem follow the new problem
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $pid WHERE `follows` = 0;");
     if (!$result) {
         die("compose failed: reorder step 2");
     }
 
-    // Insert order info for new problem
-    $result = $sql_conn->query("INSERT INTO `problem_order` (`pid`, `follows`) VALUES ($pid, 0)");
+    // Now make the new problem first
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = 0 WHERE `pid` = $pid;");
     if (!$result) {
         die("compose failed: reorder step 3");
     }
@@ -121,6 +121,7 @@ function act_down($sql_conn)
  */
 function act_edit($sql_conn)
 {
+    // Idea: Transform the rendered content area into a textarea and change actions cell into a submit
     echo "act_edit<br/>";
 }
 
@@ -131,7 +132,28 @@ function act_edit($sql_conn)
  */
 function act_trash($sql_conn)
 {
-    echo "act_trash<br/>";
+    // Get action parameters
+    $pid = $_POST["pid"];
+
+    // Get the problem that the in-deletion problem follows
+    $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `pid` = $pid;");
+    if (!$result) {
+        die("trash failed: get follows $pid");
+    }
+    $follows = $result->fetch_assoc()["follows"];
+
+    // Exclude in-deletion problem from linked list
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `follows` = $pid;");
+    if (!$result) {
+        die("trash failed: exclude");
+    }
+
+    // Make in-deletion problem follow nothing else in the list
+    // It will be completely disconnected from every other problem
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = -1 WHERE `pid` = $pid;");
+    if (!$result) {
+        die("trash failed: isolate");
+    }
 }
 
 switch ($param_act) {
@@ -157,7 +179,7 @@ case "trash":
 //
 
 // Query the database for problem order information
-$sql_result_order = $sql_conn->query("SELECT `pid`, `follows` FROM `problem_order`;");
+$sql_result_order = $sql_conn->query("SELECT `pid`, `follows` FROM `problem`;");
 if (!$sql_result_order) {
     die("database query failed");
 }
