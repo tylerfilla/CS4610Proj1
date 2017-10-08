@@ -11,6 +11,7 @@
 //
 
 $param_act = $_POST["act"];
+$param_pid = $_POST["pid"];
 $param_page = $_GET["page"];
 $param_psize = $_GET["psize"];
 
@@ -121,8 +122,15 @@ function act_down($sql_conn)
  */
 function act_edit($sql_conn)
 {
-    // Idea: Transform the rendered content area into a textarea and change actions cell into a submit
-    echo "act_edit<br/>";
+    // Get action parameters
+    $pid = $_POST["pid"];
+    $content = $_POST["content"];
+
+    // Update problem content
+    $result = $sql_conn->query("UPDATE `problem` SET `content` = '$content' WHERE `pid` = $pid;");
+    if (!$result) {
+        die("edit failed: update content");
+    }
 }
 
 /**
@@ -225,18 +233,72 @@ $last_page = ceil(count($ordered_pids) / $page_size);
         var action_form;
         var action_form_act;
         var action_form_pid;
+        var action_form_content;
 
         function find_action_form() {
-            action_form = action_form || document.getElementById("action_form");
-            action_form_act = action_form_act || document.getElementById("action_form_act");
-            action_form_pid = action_form_pid || document.getElementById("action_form_pid");
+            action_form = action_form || document.getElementById("action-form");
+            action_form_act = action_form_act || document.getElementById("action-form-act");
+            action_form_pid = action_form_pid || document.getElementById("action-form-pid");
+            action_form_content = action_form_content || document.getElementById("action-form-content");
         }
 
-        function do_action(act, pid) {
+        function submit_action(act, pid, content) {
             find_action_form();
             action_form_act.value = act;
             action_form_pid.value = pid;
+            action_form_content.value = content;
             action_form.submit();
+        }
+
+        function act_up(pid) {
+            submit_action("up", pid, null);
+        }
+
+        function act_down(pid) {
+            submit_action("down", pid, null);
+        }
+
+        function act_edit(pid) {
+            var actions_normal = document.getElementById("actions-normal-" + pid);
+            var actions_edit = document.getElementById("actions-edit-" + pid);
+            var content_normal = document.getElementById("content-normal-" + pid);
+            var content_edit = document.getElementById("content-edit-" + pid);
+
+            actions_normal.style.display = "none";
+            actions_edit.style.display = "";
+            content_normal.style.display = "none";
+            content_edit.style.display = "";
+        }
+
+        function act_trash(pid) {
+            submit_action("trash", pid, null);
+        }
+
+        function edit_accept(pid) {
+            var actions_normal = document.getElementById("actions-normal-" + pid);
+            var actions_edit = document.getElementById("actions-edit-" + pid);
+            var content_normal = document.getElementById("content-normal-" + pid);
+            var content_edit = document.getElementById("content-edit-" + pid);
+            var content_edit_text = document.getElementById("content-edit-" + pid + "-text");
+
+            actions_normal.style.display = "";
+            actions_edit.style.display = "none";
+            content_normal.style.display = "";
+            content_edit.style.display = "none";
+
+            submit_action("edit", pid, content_edit_text.value);
+        }
+
+        function edit_reject(pid) {
+            var actions_normal = document.getElementById("actions-normal-" + pid);
+            var actions_edit = document.getElementById("actions-edit-" + pid);
+            var content_normal = document.getElementById("content-normal-" + pid);
+            var content_edit = document.getElementById("content-edit-" + pid);
+
+            actions_normal.style.display = "";
+            actions_edit.style.display = "none";
+            content_normal.style.display = "";
+            content_edit.style.display = "none";
         }
 
         //
@@ -370,16 +432,27 @@ $last_page = ceil(count($ordered_pids) / $page_size);
                 // FIXME: XSS vulnerabilities here
                 echo "<td style='width: 5%;'>$num</td>";
                 echo "<td style='width: 5%;'>$pid</td>";
-                echo "<td class='content'>$content</td>";
+                echo "<td class='content'>";
+                echo "<div id='content-normal-$pid'>$content</div>";
+                echo "<div id='content-edit-$pid' style='display: none;'>";
+                echo "<textarea id='content-edit-$pid-text' style='width: 100%;' rows='5'>$content</textarea>";
+                echo "</div>";
+                echo "</td>";
 
                 // Problem action buttons
                 // FIXME: XSS here, too
                 echo "<td class='actions' style='width: 12.5%;'>";
-                echo "<button onclick='do_action(\"up\", $pid)'><span class='glyphicon glyphicon-chevron-up'></span></button>";
-                echo "<button onclick='do_action(\"down\", $pid)'><span class='glyphicon glyphicon-chevron-down'></span></button>";
+                echo "<div id='actions-normal-$pid'>";
+                echo "<button onclick='act_up($pid)'><span class='glyphicon glyphicon-chevron-up'></span></button>";
+                echo "<button onclick='act_down($pid)'><span class='glyphicon glyphicon-chevron-down'></span></button>";
                 echo "<br />";
-                echo "<button onclick='do_action(\"edit\", $pid)'><span class='glyphicon glyphicon-pencil'></span></button>";
-                echo "<button onclick='do_action(\"trash\", $pid)'><span class='glyphicon glyphicon-trash'></span></button>";
+                echo "<button onclick='act_edit($pid)'><span class='glyphicon glyphicon-pencil'></span></button>";
+                echo "<button onclick='act_trash($pid)'><span class='glyphicon glyphicon-trash'></span></button>";
+                echo "</div>";
+                echo "<div id='actions-edit-$pid' style='display: none;'>";
+                echo "<button onclick='edit_accept($pid);'><span class='glyphicon glyphicon-ok'></span></button>";
+                echo "<button onclick='edit_reject($pid);'><span class='glyphicon glyphicon-remove'></span></button>";
+                echo "</div>";
                 echo "</td>";
 
                 // End table row
@@ -389,9 +462,10 @@ $last_page = ceil(count($ordered_pids) / $page_size);
         </table>
     </div>
 </div>
-<form id="action_form" method="post" style="display: none;">
-    <input type="hidden" id="action_form_act" name="act"/>
-    <input type="hidden" id="action_form_pid" name="pid"/>
+<form id="action-form" method="post" style="display: none;">
+    <input type="hidden" id="action-form-act" name="act"/>
+    <input type="hidden" id="action-form-pid" name="pid"/>
+    <input type="hidden" id="action-form-content" name="content"/>
 </form>
 </body>
 </html>
