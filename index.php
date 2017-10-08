@@ -68,7 +68,7 @@ function act_compose($sql_conn)
 
     // Insert content to database
     // We temporarily set follows to something nonzero as a hack (I chose 1)
-    $result = $sql_conn->query("INSERT INTO `problem` (`content`, `follows`) VALUES ('$content', 1);");
+    $result = $sql_conn->query("INSERT INTO `problem` (`content`, `follows`) VALUES ('" . $sql_conn->real_escape_string($content) . "', 1);");
     if (!$result) {
         die("compose failed: insert content");
     }
@@ -225,7 +225,7 @@ function act_edit($sql_conn)
     $content = $_POST["content"];
 
     // Update problem content
-    $result = $sql_conn->query("UPDATE `problem` SET `content` = '$content' WHERE `pid` = $pid;");
+    $result = $sql_conn->query("UPDATE `problem` SET `content` = '" . $sql_conn->real_escape_string($content) . "' WHERE `pid` = $pid;");
     if (!$result) {
         die("edit failed: update content");
     }
@@ -629,7 +629,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
                 echo "<td class='content'>";
                 echo "<div id='content-normal-$pid'>$content</div>";
                 echo "<div id='content-edit-$pid' style='display: none;'>";
-                echo "<textarea id='content-edit-$pid-text' style='width: 100%;' rows='5'>$content</textarea>";
+                echo "<textarea id='content-edit-$pid-text' style='width: 100%;' rows='5'>" . htmlentities($content) . "</textarea>";
                 echo "</div>";
                 echo "</td>";
 
@@ -655,6 +655,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
             ?>
         </table>
     </div>
+    <div class="row" style="height: 20px">&nbsp;</div>
 </div>
 <form id="action-form" method="post" style="display: none;">
     <input type="hidden" id="action-form-act" name="act"/>
