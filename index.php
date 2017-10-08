@@ -207,6 +207,54 @@ function act_trash($sql_conn)
     if (!$result) {
         die("trash failed: isolate");
     }
+
+    // Update trashed timestamp on target problem
+    $result = $sql_conn->query("UPDATE `problem` SET `trashed` = NOW() WHERE `pid` = $pid;");
+    if (!$result) {
+        die("trash failed: set trashed timestamp");
+    }
+}
+
+/**
+ * Perform the undo action.
+ *
+ * @param $sql_conn \mysqli The mysqli connection
+ */
+function act_undo($sql_conn)
+{
+    // Get the ID of the last problem to be moved to the trash
+    $result = $sql_conn->query("SELECT `pid` FROM `problem` WHERE `trashed` = (SELECT MAX(`trashed`) FROM `problem`);");
+    if (!$result) {
+        die("undo failed: get last trashed");
+    }
+    $next_pid = $result->fetch_assoc()["pid"];
+
+    // Make former first problem follow the to-be-restored problem
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $next_pid WHERE `follows` = 0;");
+    if (!$result) {
+        die("undo failed: reinstate order step 1");
+    }
+
+    // Now make the to-be-restored problem first
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = 0 WHERE `pid` = $next_pid;");
+    if (!$result) {
+        die("undo failed: reinstate order step 2");
+    }
+
+    // Clear the now-restored problem's trashed timestamp
+    $result = $sql_conn->query("UPDATE `problem` SET `trashed` = NULL WHERE `pid` = $next_pid");
+    if (!$result) {
+        die("undo failed: clear trashed timestamp");
+    }
+}
+
+/**
+ * Perform the empty trash action.
+ *
+ * @param $sql_conn \mysqli The mysqli connection
+ */
+function act_empty_trash($sql_conn)
+{
 }
 
 switch ($param_act) {
@@ -224,6 +272,12 @@ case "edit":
     break;
 case "trash":
     act_trash($sql_conn);
+    break;
+case "undo":
+    act_undo($sql_conn);
+    break;
+case "etrash":
+    act_empty_trash($sql_conn);
     break;
 }
 
@@ -325,6 +379,14 @@ $last_page = ceil(count($ordered_pids) / $page_size);
 
         function act_trash(pid) {
             submit_action("trash", pid, null);
+        }
+
+        function act_undo() {
+            submit_action("undo", 0, null);
+        }
+
+        function act_empty_trash() {
+            submit_action("etrash", 0, null);
         }
 
         function edit_accept(pid) {
@@ -450,6 +512,21 @@ $last_page = ceil(count($ordered_pids) / $page_size);
     </div>
     <div class="row">
         <label for="problem-table">Problems in bank:</label>
+        <?php
+        $sql_result_trash = $sql_conn->query("SELECT COUNT(*) FROM `problem` WHERE `trashed` IS NOT NULL;");
+        if (!$sql_result_trash) {
+            die("trash query failed");
+        }
+        $num_trashed = $sql_result_trash->fetch_all()[0][0];
+
+        if ($num_trashed > 0) {
+            echo "<div style='text-align: center; margin-bottom: 5px; padding: 5px; background-color: #eaeaea;'>";
+            echo "<label>$num_trashed problem" . ($num_trashed == 1 ? " is in" : "s are") . " in the trash.</label><br />";
+            echo "<button onclick='act_undo()'><span class='glyphicon glyphicon-backward'></span> Undo</button>";
+            echo "<button onclick='act_empty_trash()'><span class='glyphicon glyphicon-trash'></span> Empty trash</button>";
+            echo "</div>";
+        }
+        ?>
         <div style="text-align: center; margin-bottom: 5px;">
             <button onclick="go_first_page();"><span class='glyphicon glyphicon-step-backward'></span></button>
             <button onclick="go_previous_page();"><span class='glyphicon glyphicon-chevron-left'></span></button>
@@ -478,7 +555,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
                 // FIXME: SQL injection
                 $sql_result_content = $sql_conn->query("SELECT `content` FROM `problem` WHERE `pid` = $pid");
                 if (!$sql_result_content) {
-                    die("database query failed");
+                    die("list query failed");
                 }
 
                 // Fetch content
