@@ -119,7 +119,7 @@ function act_up($sql_conn)
     }
     $follower = $result->fetch_assoc()["pid"];
 
-    // Stop if problem is already first
+    // Stop if target problem is already first
     if ($follows == 0)
         return;
 
@@ -134,6 +134,10 @@ function act_up($sql_conn)
     if (!$result) {
         die("move up failed: reroute preceding: $sql_conn->error");
     }
+
+    // Stop if problem is last
+    if (!$follower)
+        return;
 
     // Make target follower follow target follows
     $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `pid` = $follower;");
@@ -151,6 +155,62 @@ function act_down($sql_conn)
 {
     // Get action parameters
     $pid = $_POST["pid"];
+
+    //
+    // Note: I define downward movement in terms of upward movement. Moving a problem down is defined as moving the
+    // subsequent problem up. Hereafter, "target" refers to this subsequent element.
+    //
+
+    // Get target problem's ID (since it is one after the action-provided ID)
+    $result = $sql_conn->query("SELECT `pid` FROM `problem` WHERE `follows` = $pid;");
+    if (!$result) {
+        die("move down failed: get target");
+    }
+    $pid = $result->fetch_assoc()["pid"];
+
+    // Stop if target problem is already last
+    if (!$pid)
+        return;
+
+    // Get target problem's follows
+    $result = $sql_conn->query("SELECT `follows` FROM `problem` WHERE `pid` = $pid;");
+    if (!$result) {
+        die("move down failed: get target follows");
+    }
+    $follows = $result->fetch_assoc()["follows"];
+
+    // Get target problem's follower
+    $result = $sql_conn->query("SELECT `pid` FROM `problem` WHERE `follows` = $pid;");
+    if (!$result) {
+        die("move down failed: get target follower");
+    }
+    $follower = $result->fetch_assoc()["pid"];
+
+    // Stop if target problem is already first
+    if ($follows == 0)
+        return;
+
+    // Make target follow target follows' follows
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = (SELECT `follows` FROM (SELECT * FROM `problem`) AS temp WHERE `pid` = $follows) WHERE `pid` = $pid;");
+    if (!$result) {
+        die("move down failed: exclude preceding: $sql_conn->error");
+    }
+
+    // Make target follows follow target
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $pid WHERE `pid` = $follows;");
+    if (!$result) {
+        die("move down failed: reroute preceding: $sql_conn->error");
+    }
+
+    // Stop if there isn't another subsequent problem
+    if (!$follower)
+        return;
+
+    // Make target follower follow target follows
+    $result = $sql_conn->query("UPDATE `problem` SET `follows` = $follows WHERE `pid` = $follower;");
+    if (!$result) {
+        die("move down failed: reroute follower: $sql_conn->error");
+    }
 }
 
 /**
