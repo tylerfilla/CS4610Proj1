@@ -242,7 +242,7 @@ function act_undo($sql_conn)
     }
 
     // Clear the now-restored problem's trashed timestamp
-    $result = $sql_conn->query("UPDATE `problem` SET `trashed` = NULL WHERE `pid` = $next_pid");
+    $result = $sql_conn->query("UPDATE `problem` SET `trashed` = NULL WHERE `pid` = $next_pid;");
     if (!$result) {
         die("undo failed: clear trashed timestamp");
     }
@@ -255,6 +255,10 @@ function act_undo($sql_conn)
  */
 function act_empty_trash($sql_conn)
 {
+    $result = $sql_conn->query("DELETE FROM `problem` WHERE `follows` = -1;");
+    if (!$result) {
+        die("empty trash failed: delete");
+    }
 }
 
 switch ($param_act) {
