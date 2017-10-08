@@ -276,6 +276,7 @@ function act_trash($sql_conn)
 function act_undo($sql_conn)
 {
     // Get the ID of the last problem to be moved to the trash
+    // This will be the next problem to be restored
     $result = $sql_conn->query("SELECT `pid` FROM `problem` WHERE `trashed` = (SELECT MAX(`trashed`) FROM `problem`);");
     if (!$result) {
         die("undo failed: get last trashed");
@@ -299,6 +300,8 @@ function act_undo($sql_conn)
     if (!$result) {
         die("undo failed: clear trashed timestamp");
     }
+
+    return $next_pid;
 }
 
 /**
@@ -331,7 +334,7 @@ case "trash":
     act_trash($sql_conn);
     break;
 case "undo":
-    act_undo($sql_conn);
+    $param_pid = act_undo($sql_conn);
     break;
 case "etrash":
     act_empty_trash($sql_conn);
@@ -374,7 +377,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
 <html>
 <head>
     <title>Math Question Bank</title>
-    <script type="text/javascript">
+    <script type="text/x-mathjax-config">
         MathJax.Hub.Config({
             tex2jax: {inlineMath: [['$', '$'], ['\\(', '\\)']]}
         });
@@ -482,7 +485,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
 
         //
         // Page Control Functions
-        // FIXME: XSS vulnerabilities abound
+        // FIXME: XSS
         //
 
         function go_first_page() {
@@ -579,7 +582,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
         if ($num_trashed > 0) {
             echo "<div style='text-align: center; margin-bottom: 5px; padding: 5px; background-color: #eaeaea;'>";
             echo "<label>$num_trashed problem" . ($num_trashed == 1 ? " is in" : "s are") . " in the trash.</label><br />";
-            echo "<button onclick='act_undo()'><span class='glyphicon glyphicon-backward'></span> Undo</button>";
+            echo "<button onclick='act_undo()'><span class='glyphicon glyphicon-backward'></span> Undo last</button>&nbsp;";
             echo "<button onclick='act_empty_trash()'><span class='glyphicon glyphicon-trash'></span> Empty trash</button>";
             echo "</div>";
         }
@@ -623,7 +626,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
                 echo "<tr" . ($pid == $param_pid ? " class='highlight'" : "") . ">";
 
                 // Order number, problem ID, and problem content
-                // FIXME: XSS vulnerabilities here
+                // FIXME: XSS
                 echo "<td style='width: 5%;'>$num</td>";
                 echo "<td style='width: 5%;'>$pid</td>";
                 echo "<td class='content'>";
@@ -634,7 +637,7 @@ $last_page = ceil(count($ordered_pids) / $page_size);
                 echo "</td>";
 
                 // Problem action buttons
-                // FIXME: XSS here, too
+                // FIXME: XSS
                 echo "<td class='actions' style='width: 12.5%;'>";
                 echo "<div id='actions-normal-$pid'>";
                 echo "<button onclick='act_up($pid)'><span class='glyphicon glyphicon-chevron-up'></span></button>";
