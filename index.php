@@ -30,16 +30,6 @@ if (!is_numeric($page_size) || $page_size <= 0) {
     exit("invalid page size");
 }
 
-// Calculate inclusive range of desired problems (1-indexed)
-// These are order indexes, not problem IDs (they are reassigned as problems move around)
-$problem_first = ($page - 1) * $page_size + 1;
-$problem_last = $problem_first + $page_size - 1;
-
-if ($problem_last < $problem_first) {
-    http_response_code(400);
-    exit;
-}
-
 //
 // Database Connection
 //
@@ -320,7 +310,8 @@ function act_empty_trash($sql_conn)
 switch ($param_act) {
 case "compose":
     $param_pid = act_compose($sql_conn);
-    break;
+    header("Location: ?page=1&psize=$page_size");
+    exit;
 case "up":
     act_up($sql_conn);
     break;
@@ -344,6 +335,11 @@ case "etrash":
 //
 // Problem List Functionality
 //
+
+// Calculate inclusive range of desired problems (1-indexed)
+// These are order indexes, not problem IDs (they are reassigned as problems move around)
+$problem_first = ($page - 1) * $page_size + 1;
+$problem_last = $problem_first + $page_size - 1;
 
 // Query the database for problem order information
 $sql_result_order = $sql_conn->query("SELECT `pid`, `follows` FROM `problem`;");
